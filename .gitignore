@@ -3,3 +3,4 @@
 *.csv
 *.rds
 old/
+.Rproj.user

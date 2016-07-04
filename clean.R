@@ -5,7 +5,7 @@ read_csv('data/raw/train.csv') %>%
   set_names(tolower(names(.))) %>%
   # all stores are always closed on Sunday
   filter(dayofweek != 7) %>%
-  # his is basically the same as open
+  # this is basically the same as open
   select(-stateholiday) %>%
   group_by(store) %>%
   arrange(date) %>%

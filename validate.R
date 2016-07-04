@@ -1,11 +1,12 @@
 setwd('~/Projects/misc/rossmann/')
 source('load.R')
-library(randomForest)
+source('model.R')
 
-data <- train_test_data(n_stores = 200)
+data <- train_test_data(n_stores = 100)
+model <- model_gbm
 
 # Build features
-rf_train_data <- 
+train_data <- 
   data$train %>%
   group_by(store) %>%
   arrange(date) %>%
@@ -30,11 +31,11 @@ features <- c(
 )
 
 stores_norm_factors <- 
-  rf_train_data %>%
+  train_data %>%
   select(store, sales_hist_avg) %>%
   distinct
 
-rf_train_data %<>%
+train_data %<>%
   select_('store', 'date', 'sales_norm', .dots = features) %>%
   filter(complete.cases(.)) %>%
   mutate_each(
@@ -44,12 +45,9 @@ rf_train_data %<>%
   )
 
 # Train model
-rf <- par_rf(
-  x = select_(rf_train_data, .dots = features),
-  y = rf_train_data$sales_norm,
-  ntree = 500,
-  mtry = 3,
-  nodesize = 50
+fit <- model$fit(
+  x = select_(train_data, .dots = features),
+  y = train_data$sales_norm
 )
 
 # Prepare test set
@@ -57,7 +55,7 @@ add_lagged_features_store <- function(store_data, lags) {
   n <- nrow(store_data)
   st <- store_data$store[1]
   sales_norm_train <- 
-    rf_train_data %>% 
+    train_data %>% 
     filter(store == st) %>%
     arrange(date) %$% 
     sales_norm
@@ -71,7 +69,7 @@ add_lagged_features_store <- function(store_data, lags) {
   store_data
 }
 
-rf_test_data <- 
+test_data <- 
   data$test %>%
   group_by(store) %>%
   arrange(date) %>%
@@ -87,10 +85,10 @@ rf_test_data <-
     features, 'date', 'sales', 'store', 'sales_hist_avg'
   ))
 
-predict_store <- function(rf, store_data, lags) {
+predict_store <- function(fit, store_data, lags) {
   predictions <- numeric()
   for (i in 1:nrow(store_data)) {
-    prediction <- predict(rf, store_data[i, ])
+    prediction <- model$predict(fit, store_data[i, ])
     predictions[i] <- prediction
     for (col in paste0('sales_', lags)) {
       j <- Position(is.na, store_data[[col]])
@@ -104,8 +102,9 @@ predict_store <- function(rf, store_data, lags) {
 }
 
 # Predict the test set
-par_predict <- function(rf, newdata, lags) {
+par_predict <- function(model, newdata, lags) {
   ncores <- parallel::detectCores()
+  doParallel::registerDoParallel(cores = ncores)
   batch_assignments <- 
     data_frame(
       store = unique(newdata$store)
@@ -123,9 +122,9 @@ par_predict <- function(rf, newdata, lags) {
     batch %>%
       group_by(store) %>%
       arrange(date) %>%
-      do(predict_store(rf, ., lags)) %>%
+      do(predict_store(model, ., lags)) %>%
       ungroup
   }
 }
 
-preds_df <- par_predict(rf, rf_test_data, lags) %T>% preds_summary
+preds_df <- par_predict(fit, test_data, lags) %T>% preds_summary

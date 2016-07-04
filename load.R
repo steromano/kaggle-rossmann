@@ -5,7 +5,7 @@ library(tidyr)
 library(ggplot2)
 library(lubridate)
 library(readr)
-
+library(foreach)
 
 rmspe <- function(predicted, actual) {
   sqrt(mean(((predicted - actual)/actual)^2))
@@ -30,17 +30,6 @@ seasonal_avg_impute <- function(x, frequency, order) {
     }
   }
   as.numeric(imputed)
-}
-
-par_rf <- function(ntree, ...) {
-  require(randomForest)
-  require(foreach)
-  ncores <- parallel::detectCores()
-  doParallel::registerDoParallel(cores = ncores)
-  foreach(
-    ntree = rep(round(ntree/ncores), ncores), 
-    .combine = randomForest::combine
-  ) %dopar% randomForest(ntree = ntree, ...)
 }
 
 preds_summary <- function(preds_df) {
