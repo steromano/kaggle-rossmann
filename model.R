@@ -20,7 +20,12 @@ model_rf <- list(
         .combine = randomForest::combine
       ) %dopar% randomForest(ntree = ntree, ...)
     }
-    par_rf(x, y, ntree = 700, mtry = 2, nodesize = 20)
+    par_rf(
+      x, y, 
+      ntree = 700, 
+      mtry = 2, 
+      nodesize = round(0.001 * nrow(x))
+    )
   },
   predict = predict
 )
@@ -31,15 +36,15 @@ model_gbm <- list(
     fit <- gbm.fit(
       x = as.data.frame(x), 
       y = y, 
+      # nTrain = round(0.8 * nrow(x)),
       distribution = 'gaussian', 
-      shrinkage = 0.005,
-      n.tree = 10000,
-      nTrain = round(0.8 * nrow(x))
+      shrinkage = 0.03,
+      n.tree = 10000
     )
     gbm.perf(fit)
     fit
   },
   predict = function(...) {
-    predict(..., ntree = 10000)
+    predict(..., n.trees = 10000)
   }
 )
