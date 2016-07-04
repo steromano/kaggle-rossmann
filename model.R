@@ -1,6 +1,13 @@
 setwd(Sys.getenv('ROSSMANN_HOME'))
 source('load.R')
 
+model_glm <- list(
+  fit = function(x, y) {
+    glm(y ~ ., data = mutate(x, y = y))
+  },
+  predict = predict
+)
+
 model_rf <- list(
   fit = function(x, y) {
     par_rf <- function(ntree, ...) {
