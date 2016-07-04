@@ -1,5 +1,6 @@
 *.Rproj*
 .Rhistory
+.Renviron
 *.csv
 *.rds
 old/

@@ -1,0 +1,1 @@
+Set `ROSSMANN_HOME=<project root>` in your local .Renviron

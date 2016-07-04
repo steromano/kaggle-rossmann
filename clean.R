@@ -1,4 +1,4 @@
-setwd('~/Projects/misc/rossmann/')
+setwd(sys.getenv('ROSSMANN_HOME'))
 source('load.R')
 
 read_csv('data/raw/train.csv') %>%

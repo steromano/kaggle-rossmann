@@ -1,4 +1,4 @@
-setwd('~/Projects/misc/rossmann/')
+setwd(Sys.getenv('ROSSMANN_HOME'))
 source('load.R')
 
 data <- train_test_data()
