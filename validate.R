@@ -22,7 +22,6 @@ train_data <-
   group_by(store) %>%
   arrange(date) %>%
   mutate(
-    sales_hist_avg = mean(sales, na.rm = TRUE),
     sales_norm = sales / sales_hist_avg,
     sales_1 = lag(sales_norm, 1),
     sales_2 = lag(sales_norm, 2),
@@ -33,14 +32,7 @@ train_data <-
     sales_12 = lag(sales_norm, 12),
     sales_18 = lag(sales_norm, 18)
   ) %>%
-  ungroup
-
-stores_norm_factors <- 
-  train_data %>%
-  select(store, sales_hist_avg) %>%
-  distinct
-
-train_data %<>%
+  ungroup %>%
   select_('store', 'date', 'sales_norm', .dots = features) %>%
   filter(complete.cases(.)) %>%
   mutate_each(
@@ -56,7 +48,7 @@ fit <- model$fit(
 )
 
 # Prepare test set
-add_lagged_features_store <- function(store_data) {
+add_lagged_features_store <- function(store_data, train_data) {
   n <- nrow(store_data)
   st <- store_data$store[1]
   sales_norm_train <- 
@@ -78,61 +70,17 @@ test_data <-
   data$test %>%
   group_by(store) %>%
   arrange(date) %>%
-  do(add_lagged_features_store(.)) %>%
+  do(add_lagged_features_store(., train_data)) %>%
   ungroup %>%
   mutate_each(
     funs(as.factor),
     storetype,
     dayofweek
   ) %>%
-  inner_join(stores_norm_factors) %>% 
   select_(.dots = c(
     features, 'date', 'sales', 'store', 'sales_hist_avg'
   ))
 
-predict_store <- function(model, fit, store_data) {
-  predictions <- numeric()
-  for (i in 1:nrow(store_data)) {
-    prediction <- model$predict(fit, store_data[i, ])
-    predictions[i] <- prediction
-    for (col in paste0('sales_', lags)) {
-      j <- Position(is.na, store_data[[col]])
-      if (!is.na(j)) {
-        store_data[j, col] <- prediction
-      }
-    }
-  }
-  store_data %>%
-    mutate(predicted = predictions * sales_hist_avg)
-}
 
 # Predict the test set
-par_predict <- function(model, fit, newdata) {
-  ncores <- parallel::detectCores()
-  doParallel::registerDoParallel(cores = ncores)
-  batch_assignments <- 
-    data_frame(
-      store = unique(newdata$store)
-    ) %>%
-    mutate(
-      batch_n = rep(
-        1:ncores, each = (nrow(.)/ncores), 
-        length.out = nrow(.)
-      )
-    )
-  
-  batches <- 
-    newdata %>%
-    inner_join(batch_assignments) %>%
-    split(.$batch_n)
-  
-  foreach(batch = batches, .combine = bind_rows) %dopar% {
-    batch %>%
-      group_by(store) %>%
-      arrange(date) %>%
-      do(predict_store(model, fit, .)) %>%
-      ungroup
-  }
-}
-
 preds_df <- par_predict(model, fit, test_data) %T>% preds_summary

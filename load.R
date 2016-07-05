@@ -69,3 +69,47 @@ train_test_data <- function(n_stores = 50,
     test = filter(data, date > train_end_date)
   )
 }
+
+predict_store <- function(model, fit, store_data) {
+  predictions <- numeric()
+  for (i in 1:nrow(store_data)) {
+    prediction <- model$predict(fit, store_data[i, ])
+    predictions[i] <- prediction
+    for (col in paste0('sales_', lags)) {
+      j <- Position(is.na, store_data[[col]])
+      if (!is.na(j)) {
+        store_data[j, col] <- prediction
+      }
+    }
+  }
+  store_data %>%
+    mutate(predicted = predictions * sales_hist_avg)
+}
+
+par_predict <- function(model, fit, newdata) {
+  ncores <- parallel::detectCores()
+  doParallel::registerDoParallel(cores = ncores)
+  batch_assignments <- 
+    data_frame(
+      store = unique(newdata$store)
+    ) %>%
+    mutate(
+      batch_n = rep(
+        1:ncores, each = (nrow(.)/ncores), 
+        length.out = nrow(.)
+      )
+    )
+  
+  batches <- 
+    newdata %>%
+    inner_join(batch_assignments) %>%
+    split(.$batch_n)
+  
+  foreach(batch = batches, .combine = bind_rows) %dopar% {
+    batch %>%
+      group_by(store) %>%
+      arrange(date) %>%
+      do(predict_store(model, fit, .)) %>%
+      ungroup
+  }
+}
