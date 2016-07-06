@@ -4,7 +4,7 @@ source('load.R')
 train_clean <- 
   read_csv('data/raw/train.csv') %>%
   set_names(tolower(names(.))) %>%
-  # all stores are always closed on Sunday
+  # all stores are always closed on Sunday <- NOT TRUE (but mostly true)
   filter(dayofweek != 7) %>%
   # this is basically the same as open
   select(-stateholiday) %>%
@@ -14,7 +14,7 @@ train_clean <-
   # seasonal average
   mutate(
     sales = seasonal_avg_impute(
-      ifelse(as.logical(open), sales, NA),
+      ifelse(sales > 0, sales, NA),
       frequency = 6, 
       order = 4
     )
@@ -30,13 +30,7 @@ store_clean <-
     is.na(competitiondistance),
     1000000,
     competitiondistance
-  )) %>%
-  # add daily sales historical average for each store
-  inner_join(
-    train_clean %>%
-      group_by(store) %>%
-      summarise(sales_hist_avg = mean(sales, na.rm = TRUE))
-  )
+  ))
 
 test_clean <-
   read_csv('data/raw/test.csv') %>%

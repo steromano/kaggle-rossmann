@@ -20,11 +20,16 @@ model_rf <- list(
         .combine = randomForest::combine
       ) %dopar% randomForest(ntree = ntree, ...)
     }
+    valid <- complete.cases(x)
     par_rf(
-      x, y, 
+    # randomForest(
+      x[valid, ],
+      y[valid],
+      # importance = TRUE,
+      do.trace = TRUE,
       ntree = 700, 
-      mtry = 2, 
-      nodesize = round(0.001 * nrow(x))
+      mtry = 4, 
+      nodesize = round(0.0005 * nrow(x))
     )
   },
   predict = predict

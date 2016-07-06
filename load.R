@@ -58,24 +58,27 @@ preds_summary <- function(preds_df) {
 
 train_test_data <- function(n_stores = 50, 
                             train_end_date = ymd("2015-06-19")) {
-  stores <- read_csv('data/clean/store_clean.csv')
   data <- 
     read_csv('data/clean/train_clean.csv') %>%
-    filter(store %in% sample(unique(store), n_stores)) %>%
-    inner_join(stores, by = 'store')
-  
+    filter(store %in% sample(unique(store), n_stores))
+
   list(
     train = filter(data, date <= train_end_date),
-    test = filter(data, date > train_end_date)
+    test = filter(data, date > train_end_date),
+    stores = read_csv('data/clean/store_clean.csv')
   )
 }
 
 predict_store <- function(model, fit, store_data) {
   predictions <- numeric()
   for (i in 1:nrow(store_data)) {
+    if (store_data[i, ] %>% map_lgl(is.na) %>% any) {
+      print(store_data[i, ])
+      stop()
+    }
     prediction <- model$predict(fit, store_data[i, ])
     predictions[i] <- prediction
-    for (col in paste0('sales_', lags)) {
+    for (col in paste0('lagged_', lags)) {
       j <- Position(is.na, store_data[[col]])
       if (!is.na(j)) {
         store_data[j, col] <- prediction
