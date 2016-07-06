@@ -7,7 +7,7 @@ data <- train_test_data(n_stores = 50)
 lags <- c(1, 2, 3, 4, 5, 6, 12, 18)
 features <- c(
   # store features (?)
-  'storetype', 'promo2', 'competitiondistance',
+  'storetype', 'promo2', 'competitiondistance', 'sales_hist_avg',
   # time series features
   'promo', 'dayofweek', paste0('sales_', lags)
 
@@ -22,18 +22,18 @@ train_data <-
   group_by(store) %>%
   arrange(date) %>%
   mutate(
-    sales_norm = sales / sales_hist_avg,
-    sales_1 = lag(sales_norm, 1),
-    sales_2 = lag(sales_norm, 2),
-    sales_3 = lag(sales_norm, 3),
-    sales_4 = lag(sales_norm, 4),
-    sales_5 = lag(sales_norm, 5),
-    sales_6 = lag(sales_norm, 6),
-    sales_12 = lag(sales_norm, 12),
-    sales_18 = lag(sales_norm, 18)
+    logsales = log(sales),
+    sales_1 = lag(logsales, 1),
+    sales_2 = lag(logsales, 2),
+    sales_3 = lag(logsales, 3),
+    sales_4 = lag(logsales, 4),
+    sales_5 = lag(logsales, 5),
+    sales_6 = lag(logsales, 6),
+    sales_12 = lag(logsales, 12),
+    sales_18 = lag(logsales, 18)
   ) %>%
   ungroup %>%
-  select_('store', 'date', 'sales_norm', .dots = features) %>%
+  select_('store', 'date', 'logsales', .dots = features) %>%
   filter(complete.cases(.)) %>%
   mutate_each(
     funs(as.factor),
@@ -44,22 +44,22 @@ train_data <-
 # Train model
 fit <- model$fit(
   x = select_(train_data, .dots = features),
-  y = train_data$sales_norm
+  y = train_data$logsales
 )
 
 # Prepare test set
 add_lagged_features_store <- function(store_data, train_data) {
   n <- nrow(store_data)
   st <- store_data$store[1]
-  sales_norm_train <- 
+  logsales_train <- 
     train_data %>% 
     filter(store == st) %>%
     arrange(date) %$% 
-    sales_norm
+    logsales
   
   for (lag in lags) {
     store_data[[paste0('sales_', lag)]] <- c(
-      tail(sales_norm_train, lag),
+      tail(logsales_train, lag),
       rep(NA, n - lag)
     )
   }

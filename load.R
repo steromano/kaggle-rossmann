@@ -83,7 +83,7 @@ predict_store <- function(model, fit, store_data) {
     }
   }
   store_data %>%
-    mutate(predicted = predictions * sales_hist_avg)
+    mutate(predicted = exp(predictions) * 0.985)
 }
 
 par_predict <- function(model, fit, newdata) {
