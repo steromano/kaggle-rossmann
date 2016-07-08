@@ -1,102 +1,70 @@
 setwd(Sys.getenv('ROSSMANN_HOME'))
 source('load.R')
+source('features.R')
 source('model.R')
 
-# Load data
+# Load data -------------
 train_clean <- read_csv('data/clean/train_clean.csv')
 store_clean <- read_csv('data/clean/store_clean.csv')
 test_clean <- read_csv('data/clean/test_clean.csv')
 
-# Training
-model <- model_rf
-lags <- c(1, 2, 3, 4, 5, 6, 12, 18)
-features <- c(
-  'storetype', 'competitiondistance', 'promo', 'dayofweek',
-  'promo2', paste0('sales_', lags)
+# Training --------------
+model <- model_xgb
+model_name <- 'xgb'
+
+train_data <- build_features_train(
+  train_clean, 
+  store_clean, 
+  extra_cols = 'store'
+)
+test_data <- build_features_test(
+  train_clean, 
+  test_clean, 
+  store_clean, 
+  extra_cols = c('store', 'date')
 )
 
-train_data <- 
-  train_clean %>%
-  inner_join(store_clean) %>%
-  inner_join(
-    test_clean %>%
-      select(store) %>%
-      distinct
-  ) %>%
-  group_by(store) %>%
-  arrange(date) %>%
-  mutate(
-    sales_hist_avg = mean(sales, na.rm = TRUE),
-    sales_norm = sales / sales_hist_avg,
-    sales_1 = lag(sales_norm, 1),
-    sales_2 = lag(sales_norm, 2),
-    sales_3 = lag(sales_norm, 3),
-    sales_4 = lag(sales_norm, 4),
-    sales_5 = lag(sales_norm, 5),
-    sales_6 = lag(sales_norm, 6),
-    sales_12 = lag(sales_norm, 12),
-    sales_18 = lag(sales_norm, 18)
-  ) %>%
-  ungroup %>%
-  select_('store', 'date', 'sales_norm', .dots = features) %>%
-  filter(complete.cases(.)) %>%
-  mutate_each(
-    funs(as.factor),
-    storetype,
-    dayofweek
-  )
+train_data %<>% filter(store %in% test_data$store)
 
 fit <- model$fit(
   x = select_(train_data, .dots = features),
-  y = train_data$sales_norm
+  y = train_data$logsales
 )
-saveRDS(fit, 'output/rf_fit.rds')
+saveRDS(fit, sprintf('output/%s_fit.rds', model_name))
 
-# Predicting
-add_lagged_features_store <- function(store_data, train_data) {
-  n <- nrow(store_data)
-  st <- store_data$store[1]
-  sales_norm_train <- 
-    train_data %>% 
-    filter(store == st) %>%
-    arrange(date) %$% 
-    sales_norm
-  
-  for (lag in lags) {
-    store_data[[paste0('sales_', lag)]] <- c(
-      tail(sales_norm_train, lag),
-      rep(NA, n - lag)
-    )
-  }
-  store_data
-}
-
-test_data <- 
-  test_clean %>%
-  filter(dayofweek != 7) %>%
-  inner_join(store_clean) %>%
-  group_by(store) %>%
-  arrange(date) %>%
-  do(add_lagged_features_store(., train_data)) %>%
-  ungroup %>%
-  mutate_each(
-    funs(as.factor),
-    storetype,
-    dayofweek
-  ) %>%
-  select_(.dots = c(
-    features, 'date', 'store', 'sales_hist_avg', 'id'
-  ))
-
+# Predicting -------------
 preds_df <- par_predict(model, fit, test_data)
-saveRDS(preds_df, 'rf_predictions.rds')
+saveRDS(preds_df, sprintf('output/%s_preds.rds', model_name))
+
+# For stores open on Sunday, use a simple historical
+# geometric mean to predict Sunday sales
+sunday_preds <-
+  train_clean %>%
+  filter(dayofweek == 7) %>%
+  group_by(store) %>%
+  summarise(sunday_predicted = exp(mean(log(sales + 1), na.rm = TRUE)) - 1) %>%
+  mutate(sunday_predicted = ifelse(is.na(sunday_predicted), 0, sunday_predicted))
 
 preds_df %>%
-  select(id, predicted) %>%
-  right_join(select(test_clean, id)) %>%
-  mutate(predicted = ifelse(is.na(predicted), 0, predicted)) %>%
-  rename(Id = id, Sales = predicted) %>%
-  write_csv('output/rf_submission.csv')
+  select(store, date, predicted) %>%
+  right_join(test_clean) %>%
+  inner_join(sunday_preds) %>%
+  mutate(predicted = ifelse(
+    dayofweek == 7,
+    sunday_predicted,
+    predicted
+  )) %>%
+  select(Id = id, Sales = predicted) %>%
+  write_csv(sprintf('output/%s_submission.csv', model_name))
 
+
+# Ensemble multiple models
+preds_rf <- read_csv('output/rf_submission.csv') %>% rename(Sales_rf = Sales)
+preds_xgboost <- read_csv('output/xgb_submission.csv') %>% rename(Sales_xgboost = Sales)
+
+inner_join(preds_rf, preds_xgboost) %>%
+  mutate(Sales = 2/(1/Sales_rf + 1/Sales_xgb)) %>%
+  select(Id, Sales) %>%
+  write_csv('output/ensemble_submission.csv')
 
 

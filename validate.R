@@ -4,16 +4,17 @@ source('model.R')
 source('features.R')
 
 # Global vars
-data <- train_test_data(n_stores = 100)
+data <- train_test_data(n_stores = 200)
 
 # Set model
 model <- model_rf
 
 # Build features
-train_data <- build_features_train(data$train, stores)
+train_data <- build_features_train(data$train, data$stores)
 test_data <- build_features_test(
-  data$train, data$test,
-  stores, 
+  data$train, 
+  data$test,
+  data$stores, 
   extra_cols = c('date', 'store', 'sales')
 )
 

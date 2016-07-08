@@ -7,6 +7,9 @@ library(lubridate)
 library(readr)
 library(foreach)
 
+ncores <- parallel::detectCores()
+doParallel::registerDoParallel(cores = ncores)
+
 rmspe <- function(predicted, actual) {
   sqrt(mean(((predicted - actual)/actual)^2))
 }
@@ -76,7 +79,7 @@ predict_store <- function(model, fit, store_data) {
       print(store_data[i, ])
       stop()
     }
-    prediction <- model$predict(fit, store_data[i, ])
+    prediction <- model$predict(fit, store_data[i, , drop = FALSE])
     predictions[i] <- prediction
     for (col in paste0('lagged_', lags)) {
       j <- Position(is.na, store_data[[col]])
@@ -90,8 +93,6 @@ predict_store <- function(model, fit, store_data) {
 }
 
 par_predict <- function(model, fit, newdata) {
-  ncores <- parallel::detectCores()
-  doParallel::registerDoParallel(cores = ncores)
   batch_assignments <- 
     data_frame(
       store = unique(newdata$store)
