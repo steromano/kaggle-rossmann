@@ -1,4 +1,3 @@
-primary_key <- c('store', 'date')
 store_features <- c('storetype', 'competitiondistance', 'sales_hist_med', 'trend')
 day_features <- c('promo', 'dayofweek', 'day_n', 'month', 'day', 'schoolholiday')
 lags <- c(1, 2, 3, 4, 5, 6, 12, 18)
@@ -19,6 +18,7 @@ build_features_day <- function(data, start = 0) {
 }
 
 build_features_store <- function(train_data, stores) {
+  require(glmnet)
   store_trends <- 
     train_data %>%
     group_by(store) %>%
@@ -71,7 +71,7 @@ build_lagged_features_test <- function(train_data, test_data) {
     st <- store_data$store[1]
     logsales_train <- 
       train_data %>% 
-      filter(store == st) %>%
+      filter(store == st, dayofweek != 7) %>%
       arrange(date) %$% 
       log(sales)
     
@@ -94,7 +94,7 @@ build_lagged_features_test <- function(train_data, test_data) {
 # Wrappers
 build_features_train <- function(train_data, stores, extra_cols = character()) {
   train_data %>%
-    filter(sales > 0) %>%
+    filter(dayofweek != 7, sales > 0) %>%
     build_features_day %>%
     build_lagged_features_train %>%
     inner_join(build_features_store(., stores)) %>%
@@ -105,6 +105,7 @@ build_features_train <- function(train_data, stores, extra_cols = character()) {
 build_features_test <- function(train_data, test_data, stores, extra_cols = character()) {
   start <- train_data %>% count(store) %$% max(n)
   test_data %>%
+    filter(dayofweek != 7) %>%
     build_features_day(start = start) %>%
     build_lagged_features_test(train_data, .) %>%
     inner_join(build_features_store(train_data, stores)) %>%
