@@ -4,8 +4,6 @@ source('load.R')
 train_clean <- 
   read_csv('data/raw/train.csv') %>%
   set_names(tolower(names(.))) %>%
-  # all stores are always closed on Sunday <- NOT TRUE (but mostly true)
-  filter(dayofweek != 7) %>%
   # this is basically the same as open
   select(-stateholiday) %>%
   group_by(store) %>%
@@ -15,7 +13,7 @@ train_clean <-
   mutate(
     sales = seasonal_avg_impute(
       ifelse(sales > 0, sales, NA),
-      frequency = 6, 
+      frequency = 7, 
       order = 4
     )
   ) %>%
