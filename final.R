@@ -9,8 +9,8 @@ store_clean <- read_csv('data/clean/store_clean.csv')
 test_clean <- read_csv('data/clean/test_clean.csv')
 
 # Training --------------
-model <- model_xgb
-model_name <- 'xgb'
+model <- model_rf_xgb
+model_name <- 'ensemble'
 
 train_data <- build_features_train(
   train_clean, 
@@ -57,14 +57,5 @@ preds_df %>%
   select(Id = id, Sales = predicted) %>%
   write_csv(sprintf('output/%s_submission.csv', model_name))
 
-
-# Ensemble multiple models
-preds_rf <- read_csv('output/rf_submission.csv') %>% rename(Sales_rf = Sales)
-preds_xgboost <- read_csv('output/xgb_submission.csv') %>% rename(Sales_xgboost = Sales)
-
-inner_join(preds_rf, preds_xgboost) %>%
-  mutate(Sales = 2/(1/Sales_rf + 1/Sales_xgb)) %>%
-  select(Id, Sales) %>%
-  write_csv('output/ensemble_submission.csv')
 
 

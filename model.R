@@ -121,3 +121,18 @@ model_xgb <- list(
     predict(fit, data.matrix(newdata))
   }
 )
+
+model_rf_xgb <- list(
+  fit = function(...) {
+    rf_fit <- readRDS('output/rf_fit.rds')
+    xgb_fit <- readRDS('output/xgb_fit.rds')
+    list(
+      rf = rf_fit, xgb = xgb_fit
+    )
+  },
+  predict = function(fit, newdata) {
+    preds_rf <- model_rf$predict(fit$rf, newdata)
+    preds_xgb <- model_xgb$predict(fit$xgb, newdata)
+    pmap_dbl(list(preds_rf, preds_xgb), harmonic_mean)
+  }
+)

@@ -117,3 +117,8 @@ par_predict <- function(model, fit, newdata) {
       ungroup
   }
 }
+
+harmonic_mean <- function(...) {
+  x <- unlist(list(...))
+  length(x) / sum(1 / x)
+}
